@@ -2,46 +2,57 @@
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
-    <title>تحدي الأرقام - رابط خاص</title>
+    <title>غرفة التحدي الخاصة</title>
     <script src="https://js.pusher.com/8.4.0/pusher.min.js"></script>
     <style>
         body { background: #0f172a; color: white; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; font-family: sans-serif; }
-        .share-box { background: #1e293b; padding: 15px; border-radius: 10px; margin-bottom: 20px; border: 1px dashed #38bdf8; text-align: center; }
-        input { background: #0f172a; color: #4ade80; border: 1px solid #334155; padding: 5px; width: 250px; border-radius: 5px; }
+        .room-info { background: #1e293b; padding: 20px; border-radius: 15px; margin-bottom: 20px; border: 2px solid #38bdf8; text-align: center; width: 320px; }
+        .copy-btn { background: #38bdf8; color: #0f172a; border: none; padding: 8px 15px; border-radius: 5px; cursor: pointer; font-weight: bold; margin-top: 10px; width: 100%; }
+        .copy-btn:active { background: #4ade80; }
         .board { display: grid; grid-template-columns: repeat(4, 80px); gap: 10px; background: #1e293b; padding: 20px; border-radius: 15px; }
-        .tile { width: 80px; height: 80px; background: #38bdf8; color: #0f172a; display: flex; align-items: center; justify-content: center; font-size: 2rem; font-weight: bold; border-radius: 10px; cursor: pointer; }
+        .tile { width: 80px; height: 80px; background: #38bdf8; color: #0f172a; display: flex; align-items: center; justify-content: center; font-size: 2rem; font-weight: bold; border-radius: 10px; cursor: pointer; transition: 0.2s; }
         .tile.empty { background: #334155; }
     </style>
 </head>
 <body>
-    <div class="share-box">
-        <p>أرسل هذا الرابط لخويك ليلعب معك:</p>
-        <input type="text" id="gameLink" readonly>
+
+    <div class="room-info">
+        <div id="status" style="color: #4ade80; margin-bottom: 10px;">جاري إنشاء الغرفة...</div>
+        <input type="text" id="gameLink" style="width: 100%; padding: 5px; background: #0f172a; color: white; border: 1px solid #334155; text-align: center;" readonly>
+        <button class="copy-btn" onclick="copyLink()">نسخ رابط الغرفة 🔗</button>
     </div>
+
     <div class="board" id="board"></div>
 
     <script>
-        // 1. توليد أو قراءة معرف الغرفة من الرابط
-        const urlParams = new URLSearchParams(window.location.search);
-        let roomId = urlParams.get('room');
-        if (!roomId) {
-            roomId = Math.random().toString(36).substring(7);
-            window.history.replaceState({}, '', '?room=' + roomId);
+        // 1. استخراج أو إنشاء معرف الغرفة
+        const params = new URLSearchParams(window.location.search);
+        let roomId = params.get('room') || Math.random().toString(36).substring(7);
+        
+        // تحديث الرابط في المتصفح بدون إعادة تحميل الصفحة
+        if (!params.has('room')) {
+            const newUrl = window.location.protocol + "//" + window.location.host + window.location.pathname + '?room=' + roomId;
+            window.history.replaceState({path: newUrl}, '', newUrl);
         }
         document.getElementById('gameLink').value = window.location.href;
 
-        // 2. إعداد Pusher
+        // 2. إعداد السيرفر (Pusher)
         const pusher = new Pusher('d97e993537a30a3c6a81', { 
             cluster: 'ap2',
-            forceTLS: true // الخيار الذي سألت عنه لتأمين الاتصال
+            forceTLS: true // تأمين الاتصال
         });
 
-        // الاشتراك في قناة خاصة بهذا الرابط فقط
+        // الاشتراك في قناة "خاصة" لهذا الرقم (الروم) فقط
+        // ملاحظة: يجب أن يبدأ الاسم بـ client- لتتمكن من الإرسال
         const channel = pusher.subscribe('client-room-' + roomId);
+
+        pusher.connection.bind('connected', () => {
+            document.getElementById('status').innerText = "أنت في الغرفة: " + roomId;
+        });
 
         let tiles = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 0];
 
-        // استقبال الحركة
+        // استقبال الحركات
         channel.bind('client-move', (data) => {
             tiles = data.newTiles;
             render();
@@ -57,13 +68,22 @@
                     if ([i-1, i+1, i-4, i+4].includes(z)) {
                         [tiles[i], tiles[z]] = [tiles[z], tiles[i]];
                         render();
-                        // إرسال الحركة للغرفة الخاصة
+                        // إرسال الحركة فوراً لخويك في نفس الغرفة
                         channel.trigger('client-move', { newTiles: tiles });
                     }
                 };
                 b.appendChild(d);
             });
         }
+
+        function copyLink() {
+            const copyText = document.getElementById("gameLink");
+            copyText.select();
+            copyText.setSelectionRange(0, 99999);
+            document.execCommand("copy");
+            alert("تم نسخ الرابط! أرسله لخويك.");
+        }
+
         render();
     </script>
 </body>
